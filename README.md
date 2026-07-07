@@ -1,105 +1,100 @@
 import hashlib
-import time
 import secrets
 
-class CoinTelurAdvanced:
+class TelurWalletInterface:
     def __init__(self):
-        self.blockchain = []
-        self.dompet_jaringan = {}
-        self.total_suplai = 50000000.0
-        self.suplai_beredar = 0.0
-        self.gas_fee_standar = 5.0  # Biaya transfer flat: 5 Coin Telur per transaksi
-        
-        # INI AKUN UTAMA ANDA
-        self.kunci_privat_anda = "priv_" + hashlib.sha256(b"nmara5220@gmail.com-190619").hexdigest()[:32]
-        self.alamat_publik_anda = "tlr_" + hashlib.sha256(self.kunci_privat_anda.encode()).hexdigest()[:20]
-        
-        # Alokasi saldo awal
-        self.dompet_jaringan[self.alamat_publik_anda] = 15000000.0
-        self.suplai_beredar += 15000000.0
-        
-        # Buat Genesis Block
-        self.kunci_blok_baru(previous_hash="0", data="Genesis Block - Sistem Fitur Lanjutan Aktif")
+        self.session_key = None
+        self.session_address = None
 
-    def buat_dompet_baru(self):
-        kunci_privat_baru = "priv_" + secrets.token_hex(16)
-        alamat_publik_baru = "tlr_" + hashlib.sha256(kunci_privat_baru.encode()).hexdigest()[:20]
-        self.dompet_jaringan[alamat_publik_baru] = 0.0
-        return kunci_privat_baru, alamat_publik_baru
-
-    def kirim_coin_dengan_gas(self, kunci_privat_pengirim, alamat_tujuan, jumlah, alamat_penambang):
-        """Memproses pengiriman koin dengan potongan Gas Fee untuk Penambang"""
-        alamat_pengirim = "tlr_" + hashlib.sha256(kunci_privat_pengirim.encode()).hexdigest()[:20]
-        
-        if alamat_pengirim not in self.dompet_jaringan:
-            return False, "❌ Kunci Privat Tidak Valid!"
+    def start_terminal(self, engine_instance):
+        while True:
+            print("\n" + "="*45)
+            print("🚀  TELUR NETWORK TERMINAL CLIENT v1.0  🚀")
+            print("="*45)
+            if self.session_address:
+                print(f"STATUS: ACTIVE SESSION")
+                print(f"NODE ADDRESS: {self.session_address}")
+            else:
+                print("STATUS: DISCONNECTED")
+            print("-"*45)
+            print("1. Initialize New Wallet Keypair")
+            print("2. Authenticate with Existing Secret Key")
+            print("3. Query Node Balance")
+            print("4. Broadcast Transaction")
+            print("5. Terminate Terminal")
+            print("="*45)
             
-        # Total yang harus dibayar pengirim = Jumlah kirim + Gas Fee
-        total_potongan = jumlah + self.gas_fee_standar
+            cmd = input("Enter command (1-5): ").strip()
+
+            if cmd == "1":
+                self.init_keypair(engine_instance)
+            elif cmd == "2":
+                self.auth_session()
+            elif cmd == "3":
+                self.query_balance(engine_instance)
+            elif cmd == "4":
+                self.broadcast_tx(engine_instance)
+            elif cmd == "5":
+                print("\n[INFO] Terminal session terminated.")
+                break
+            else:
+                print("[WARN] Invalid command sequence.")
+
+    def init_keypair(self, engine):
+        secret_seed = "priv_" + secrets.token_hex(16)
+        public_node = "tlr_" + hashlib.sha256(secret_seed.encode()).hexdigest()[:20]
         
-        if self.dompet_jaringan[alamat_pengirim] < total_potongan:
-            return False, f"❌ Saldo kurang! Butuh {total_potongan:,} (Termasuk Gas Fee: {self.gas_fee_standar} TLR)"
+        engine.vault_balances[public_node] = 0.0
+        self.session_key = secret_seed
+        self.session_address = public_node
+        
+        print("\n[SUCCESS] NEW KEYPAIR GENERATED")
+        print(f"Public Address : {public_node}")
+        print(f"Secret Key     : {secret_seed}")
+        print("[CRITICAL] Backup your secret key. Lost keys cannot be recovered.")
+
+    def auth_session(self):
+        token_input = input("\nEnter Secret Key (priv_...): ").strip()
+        if not token_input.startswith("priv_") or len(token_input) < 20:
+            print("[ERROR] Authentication token malformed.")
+            return
             
-        if alamat_tujuan not in self.dompet_jaringan:
-            return False, "❌ Alamat tujuan tidak ditemukan!"
+        self.session_address = "tlr_" + hashlib.sha256(token_input.encode()).hexdigest()[:20]
+        self.session_key = token_input
+        print(f"\n[SUCCESS] Authenticated. Active node: {self.session_address}")
 
-        # Eksekusi Ledger (Potong pengirim, tambah penerima, beri upah gas ke penambang)
-        self.dompet_jaringan[alamat_pengirim] -= total_potongan
-        self.dompet_jaringan[alamat_tujuan] += jumlah
-        self.dompet_jaringan[alamat_penambang] = self.dompet_jaringan.get(alamat_penambang, 0.0) + self.gas_fee_standar
+    def query_balance(self, engine):
+        if not self.session_address:
+            print("[ERROR] No active session found. Please authenticate first.")
+            return
+            
+        balance = engine.vault_balances.get(self.session_address, 0.0)
+        print(f"\n[BALANCE] Verified Ledger Balance: {balance:,} TLR")
+
+    def broadcast_tx(self, engine):
+        if not self.session_key:
+            print("[ERROR] Transaction unsigned. Authenticate session.")
+            return
+            
+        target = input("\nEnter Destination Address (tlr_...): ").strip()
+        try:
+            amount = float(input("Enter Value to Transfer: "))
+        except ValueError:
+            print("[ERROR] Value must be numerical.")
+            return
+            
+        miner_node = "tlr_network_central_pool"
+        print("\n[PROCESSING] Signing payload and broadcasting to ledger...")
         
-        # Kunci transaksi ke blok baru
-        detail_tx = f"TX: {alamat_pengirim[:8]}.. kirim {jumlah:,} ke {alamat_tujuan[:8]}.. | Gas: {self.gas_fee_standar} ke {alamat_penambang[:8]}.."
-        self.kunci_blok_baru(previous_hash=self.blockchain[-1]["hash"], data=detail_tx)
-        return True, "💸 Transaksi Sukses Masuk Blok!"
+        status, log_msg = engine.execute_ledger_transfer(
+            self.session_key, target, amount, miner_node
+        )
+        print(f"[NODE LOG] {log_msg}")
 
-    def cek_riwayat_alamat(self, alamat_dompet):
-        """FITUR BARU: Melacak semua riwayat blok yang melibatkan alamat ini"""
-        print(f"\n🔍 MENELUSURI BLOK UNTUK ALAMAT: {alamat_dompet}")
-        ditemukan = False
-        
-        for blok in self.blockchain:
-            # Jika alamat dompet tersebut tertulis di dalam data blok
-            if alamat_dompet[:8] in blok["data"] or alamat_dompet in blok["data"]:
-                print(f"📌 Terdeteksi di Blok #{blok['index']} [{blok['timestamp']}]")
-                print(f"   Aktivitas: {blok['data']}")
-                ditemukan = True
-        
-        if not ditemukan:
-            print("❌ Belum ada riwayat transaksi untuk alamat ini.")
-
-    def kunci_blok_baru(self, previous_hash, data):
-        index = len(self.blockchain)
-        timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-        teks_kunci = f"{index}{timestamp}{data}{previous_hash}"
-        hash_blok = hashlib.sha256(teks_kunci.encode()).hexdigest()
-        
-        self.blockchain.append({
-            "index": index,
-            "timestamp": timestamp,
-            "data": data,
-            "previous_hash": previous_hash,
-            "hash": hash_blok
-        })
-
-# =======================================================
-# SIMULASI PENGUJIAN FITUR BARU DI BLOK SENDIRI
-# =======================================================
-coin_telur = CoinTelurAdvanced()
-
-# 1. Buat dua akun baru (Satu pengguna, satu bertindak sebagai penambang)
-_, dompet_budi = coin_telur.buat_dompet_baru()
-_, dompet_penambang = coin_telur.buat_dompet_baru()
-
-print(f"Saldo Awal Anda       : {coin_telur.dompet_jaringan[coin_telur.alamat_publik_anda]:,} TLR")
-print(f"Saldo Awal Penambang  : {coin_telur.dompet_jaringan[dompet_penambang]:,} TLR")
-
-# 2. Anda mengirim 100.000 koin ke Budi, biaya gas mengalir ke akun Penambang
-print("\n⚡ Memproses transfer pertama dengan skema Gas Fee...")
-coin_telur.kirim_coin_dengan_gas(coin_telur.kunci_privat_anda, dompet_budi, 100000, dompet_penambang)
-
-print(f" Sisa Saldo Anda      : {coin_telur.dompet_jaringan[coin_telur.alamat_publik_anda]:,} TLR")
-print(f" Saldo Upah Penambang : {coin_telur.dompet_jaringan[dompet_penambang]:,} TLR (Berhasil menerima 5 TLR!)")
-
-# 3. MENGUJI FITUR EXPLORER (RIWAYAT TRANSAKSI)
-coin_telur.cek_riwayat_alamat(coin_telur.alamat_publik_anda)
+if __name__ == "__main__":
+    from coin_telur import TelurCoreEngine
+    
+    core_network = TelurCoreEngine()
+    client = TelurWalletInterface()
+    client.start_terminal(core_network)
+    
