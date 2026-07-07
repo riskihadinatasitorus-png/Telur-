@@ -173,3 +173,99 @@ for blok in coin_telur.blockchain:
     print(f"   Pencatat  : {blok['pencatat_blok']}")
     print(f"   Hash Kunci: {blok['hash']}")
     print("-" * 65)
+import hashlib
+import time
+import secrets
+
+class CoinTelurKripto:
+    def __init__(self):
+        self.blockchain = []
+        self.dompet_jaringan = {}
+        self.total_suplai = 50000000.0  # Batas Maksimal: 50 Juta Coin
+        self.suplai_beredar = 0.0
+        
+        # GENERASI OTOMATIS AKUN UTAMA PERTAMA ANDA (nmara5220@gmail.com)
+        # Menggunakan hash dari email Anda sebagai basis pembuatan Kunci Privat unik
+        self.kunci_privat_anda = "priv_" + hashlib.sha256(b"nmara5220@gmail.com-190619").hexdigest()[:32]
+        self.alamat_publik_anda = "tlr_" + hashlib.sha256(self.kunci_privat_anda.encode()).hexdigest()[:20]
+        
+        # Daftarkan dompet utama Anda ke jaringan
+        self.dompet_jaringan[self.alamat_publik_anda] = 15000000.0  # Alokasi awal 15 Juta Coin
+        self.suplai_beredar += 15000000.0
+        
+        # Buat Genesis Block (Kunci Blok Awal)
+        self.kunci_blok_baru(previous_hash="0", data="Genesis Block - Inisialisasi Kriptografi Coin Telur")
+
+    def buat_dompet_baru(self):
+        """Membuat kunci rahasia acak dan alamat publik baru seperti MetaMask"""
+        kunci_privat_baru = "priv_" + secrets.token_hex(16)
+        alamat_publik_baru = "tlr_" + hashlib.sha256(kunci_privat_baru.encode()).hexdigest()[:20]
+        
+        self.dompet_jaringan[alamat_publik_baru] = 0.0
+        return kunci_privat_baru, alamat_publik_baru
+
+    def kirim_coin(self, kunci_privat_pengirim, alamat_tujuan, jumlah):
+        """Memproses pengiriman koin dengan validasi tanda tangan Kunci Privat"""
+        # Turunkan/hitung alamat publik pengirim berdasarkan kunci privat yang dimasukkan
+        alamat_pengirim = "tlr_" + hashlib.sha256(kunci_privat_pengirim.encode()).hexdigest()[:20]
+        
+        # Validasi 1: Apakah kunci privat ini memiliki aset di jaringan?
+        if alamat_pengirim not in self.dompet_jaringan:
+            return False, "❌ Transaksi Ditolak! Kunci Privat Anda salah atau tidak valid."
+            
+        # Validasi 2: Pengecekan kecukupan saldo
+        if self.dompet_jaringan[alamat_pengirim] < jumlah:
+            return False, f"❌ Transaksi Gagal! Saldo dompet Anda tidak mencukupi (Saldo: {self.dompet_jaringan[alamat_pengirim]:,} Coin)."
+            
+        # Validasi 3: Apakah alamat tujuan terdaftar?
+        if alamat_tujuan not in self.dompet_jaringan:
+            return False, "❌ Transaksi Gagal! Alamat dompet tujuan tidak ditemukan di jaringan."
+
+        # Eksekusi pemindahan saldo di dalam ledger blockchain
+        self.dompet_jaringan[alamat_pengirim] -= jumlah
+        self.dompet_jaringan[alamat_tujuan] += jumlah
+        
+        # Kunci data transaksi ke dalam blok baru
+        data_tx = f"Kirim: {alamat_pengirim[:10]}... mengirim {jumlah:,} Koin ke {alamat_tujuan[:10]}..."
+        self.kunci_blok_baru(previous_hash=self.blockchain[-1]["hash"], data=data_tx)
+        return True, f"💸 Sukses mengirim {jumlah:,} Coin Telur ke alamat {alamat_tujuan}!"
+
+    def kunci_blok_baru(self, previous_hash, data):
+        index = len(self.blockchain)
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+        teks_kunci = f"{index}{timestamp}{data}{previous_hash}"
+        hash_blok = hashlib.sha256(teks_kunci.encode()).hexdigest()
+        
+        self.blockchain.append({
+            "index": index,
+            "timestamp": timestamp,
+            "data": data,
+            "previous_hash": previous_hash,
+            "hash": hash_blok
+        })
+
+# =======================================================
+# JALANKAN SISTEM DAN TAMPILKAN KUNCI RAHASIA ANDA
+# =======================================================
+coin_telur = CoinTelurKripto()
+
+print("====================================================")
+print("🔑 DATA KUNCI RAHASIA DAN DOMPET UTAMA ANDA")
+print("====================================================")
+print("⚠️ JANGAN BAGIKAN KUNCI PRIVAT ANDA KEPADA SIAPAPUN!")
+print(f"👉 Kunci Privat Anda (Rahasia) : {coin_telur.kunci_privat_anda}")
+print(f"👉 Alamat Dompet Anda (Publik) : {coin_telur.alamat_publik_anda}")
+print(f"💰 Total Koin Tersimpan        : {coin_telur.dompet_jaringan[coin_telur.alamat_publik_anda]:,} Coin Telur")
+print("====================================================\n")
+
+# Simulasi membuat dompet untuk penambang baru
+kunci_priv_user2, alamat_pub_user2 = coin_telur.buat_dompet_baru()
+print("🤖 Berhasil membuat dompet baru untuk Penambang_2:")
+print(f"   Alamat Tujuan: {alamat_pub_user2}\n")
+
+print("⚡ Melakukan transfer uji coba mengotorisasi transaksi dengan Kunci Privat Anda...")
+# Mencoba mengirim 2,5 juta koin menggunakan kunci privat rahasia Anda
+_, laporan = coin_telur.kirim_coin(coin_telur.kunci_privat_anda, alamat_pub_user2, 2500000)
+print(laporan)
+
+print(f"\n📉 Sisa saldo di dompet utama Anda sekarang: {coin_telur.dompet_jaringan[coin_telur.alamat_publik_anda]:,} Coin Telur")
