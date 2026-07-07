@@ -78,4 +78,8 @@ if __name__ == "__main__":
     core = TelurCoreEngine()
     client = TelurWalletInterface()
     client.start_terminal(core)
+    
+
+
+
 
