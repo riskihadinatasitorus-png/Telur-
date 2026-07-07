@@ -1,4 +1,21 @@
-## 🪙 Proyek Coin Telur
+# =======================================================
+# MENU DOMPET INTERAKTIF UNTUK MENGECEK KOIN ANDA
+# =======================================================
+
+print("\n=== 💳 DOMPET DIGITAL COIN TELUR ===")
+input_email = input("Masukkan Email Akun Anda: ")
+input_sandi = input("Masukkan Sandi Akun Anda: ")
+
+# Proses pengecekan keamanan sebelum membuka dompet
+if coin_telur.masuk_akun(input_email, input_sandi)[0]:
+    saldo_simpanan = coin_telur.akun[input_email]["saldo"]
+    alamat_dompet = coin_telur.akun[input_email]["alamat"]
+    print(f"\n🔐 AKSES DOMPET DITERIMA!")
+    print(f"📍 Alamat Dompet Anda : {alamat_dompet}")
+    print(f"💰 Total Koin Tersimpan: {saldo_simpanan:,} Coin Telur")
+else:
+    print("\n❌ AKSES DITOLAK! Email atau sandi salah.")
+    ## 🪙 Proyek Coin Telur
 Model blockchain ini memiliki spesifikasi khusus:
 - Total suplai dibatasi maksimal 50 Juta Coin.
 - Dilengkapi sistem akun penambang, voucher, dan penanda log in/out.
