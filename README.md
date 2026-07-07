@@ -1,135 +1,141 @@
 import hashlib
-import time
 import secrets
 
-class TelurCoreEngine:
+class TelurWalletInterface:
     def __init__(self):
-        self.ledger_chain = []
-        self.vault_balances = {}
-        self.max_cap = 50000000.0
-        self.circulating_supply = 0.0
-        self.base_gas = 5.0
-        self.block_subsidy = 50.0
-        
-        # KONFIGURASI TOKO / AMM POOL
-        self.token_price_idr = 10000.0  # Harga 1 TLR = Rp 10.000
-        self.shop_address = "tlr_central_liquidity_pool"
-        self.shop_fiat_vault = 50000000.0  # Kas awal toko: Rp 50.000.000
-        self.vault_balances[self.shop_address] = 5000000.0  # Stok koin di toko: 5 Juta TLR
-        self.circulating_supply += 5000000.0
-        
-        # Inisialisasi Akun Founder Utama
-        self.master_key = "priv_" + hashlib.sha256(b"nmara5220@gmail.com-190619").hexdigest()[:32]
-        self.genesis_address = "tlr_" + hashlib.sha256(self.master_key.encode()).hexdigest()[:20]
-        
-        self.vault_balances[self.genesis_address] = 15000000.0
-        self.circulating_supply += 15000000.0
-        
-        # Buat dompet simulasi Rupiah untuk melacak uang fiat pengguna
-        self.fiat_balances = {self.genesis_address: 100000000.0} # Dana awal Anda Rp 100 Juta
-        
-        self.commit_new_block(prev_node="0", payload="Telur Network SECURE CORE with AMM Active", miner_id="NETWORK_PIONEER")
+        self.session_key = None
+        self.session_address = None
+        # FITUR BARU: Buku alamat untuk menyimpan alamat koin
+        self.address_book = {} 
 
-    def generate_keypair(self):
+    def start_terminal(self, engine_instance):
+        while True:
+            print("\n" + "="*45)
+            print("🚀  TELUR NETWORK TERMINAL CLIENT v2.0  🚀")
+            print("="*45)
+            if self.session_address:
+                print(f"STATUS: ACTIVE SESSION")
+                print(f"NODE ADDRESS: {self.session_address}")
+                # Menampilkan saldo Rupiah dan saldo Koin sekaligus
+                fiat = engine_instance.fiat_balances.get(self.session_address, 0.0)
+                coin = engine_instance.vault_balances.get(self.session_address, 0.0)
+                print(f"BALANCE     : Rp {fiat:,.0f} | {coin:,} TLR")
+            else:
+                print("STATUS: DISCONNECTED")
+            print("-"*45)
+            print("1. Initialize New Wallet Keypair (Buat Dompet)")
+            print("2. Authenticate with Existing Secret Key (Masuk)")
+            print("3. Broadcast Transaction (Kirim Koin ke Orang)")
+            print("4. Buy Coins from Shop (Beli Koin dari Toko)")
+            print("5. Sell Coins to Shop (Jual Koin ke Toko)")
+            print("6. Save Address to Book (Simpan Alamat Koin)")
+            print("7. View Saved Address Book (Lihat Daftar Alamat)")
+            print("8. Terminate Terminal (Keluar)")
+            print("="*45)
+            
+            cmd = input("Enter command (1-8): ").strip()
+
+            if cmd == "1":
+                self.init_keypair(engine_instance)
+            elif cmd == "2":
+                self.auth_session()
+            elif cmd == "3":
+                self.broadcast_tx(engine_instance)
+            elif cmd == "4":
+                self.buy_from_shop(engine_instance)
+            elif cmd == "5":
+                self.sell_to_shop(engine_instance)
+            elif cmd == "6":
+                self.save_address()
+            elif cmd == "7":
+                self.view_address_book()
+            elif cmd == "8":
+                print("\n[INFO] Terminal session terminated.")
+                break
+            else:
+                print("[WARN] Invalid command sequence.")
+
+    def init_keypair(self, engine):
         secret_seed = "priv_" + secrets.token_hex(16)
         public_node = "tlr_" + hashlib.sha256(secret_seed.encode()).hexdigest()[:20]
-        self.vault_balances[public_node] = 0.0
-        self.fiat_balances[public_node] = 20000000.0  # Pengguna baru diberi modal simulasi Rp 20 Juta
-        return secret_seed, public_node
+        engine.vault_balances[public_node] = 0.0
+        engine.fiat_balances[public_node] = 20000000.0  # Modal awal Rp 20 Juta
+        self.session_key = secret_seed
+        self.session_address = public_node
+        print("\n[SUCCESS] NEW KEYPAIR GENERATED")
+        print(f"Public Address : {public_node}")
+        print(f"Secret Key     : {secret_seed}")
 
-    def execute_shop_buy(self, auth_token, fiat_amount):
-        """FITUR BARU: Fungsi untuk membeli TLR dari Toko menggunakan Rupiah"""
-        buyer_node = "tlr_" + hashlib.sha256(auth_token.encode()).hexdigest()[:20]
-        if buyer_node not in self.vault_balances:
-            return False, "ERR_AUTH_FAILED"
-            
-        if self.fiat_balances.get(buyer_node, 0.0) < fiat_amount:
-            return False, "ERR_INSUFFICIENT_FIAT"
-            
-        tokens_to_receive = fiat_amount / self.token_price_idr
-        if self.vault_balances[self.shop_address] < tokens_to_receive:
-            return False, "ERR_SHOP_OUT_OF_STOCK"
-            
-        # Eksekusi Pertukaran
-        self.fiat_balances[buyer_node] -= fiat_amount
-        self.shop_fiat_vault += fiat_amount
-        self.vault_balances[self.shop_address] -= tokens_to_receive
-        self.vault_balances[buyer_node] += tokens_to_receive
-        
-        log = f"SHOP_BUY_{buyer_node[:6]}_VAL_{int(tokens_to_receive)}_TLR"
-        self.commit_new_block(prev_node=self.ledger_chain[-1]["node_hash"], payload=log, miner_id=self.shop_address)
-        return True, f"SUCCESS_BOUGHT_{tokens_to_receive:,.0f}_TLR"
+    def auth_session(self):
+        token_input = input("\nEnter Secret Key (priv_...): ").strip()
+        if not token_input.startswith("priv_") or len(token_input) < 20:
+            print("[ERROR] Authentication token malformed.")
+            return
+        self.session_address = "tlr_" + hashlib.sha256(token_input.encode()).hexdigest()[:20]
+        self.session_key = token_input
+        print(f"\n[SUCCESS] Authenticated. Active node: {self.session_address}")
 
-    def execute_shop_sell(self, auth_token, token_amount):
-        """FITUR BARU: Fungsi untuk menjual kembali TLR ke Toko untuk mendapatkan Rupiah"""
-        seller_node = "tlr_" + hashlib.sha256(auth_token.encode()).hexdigest()[:20]
-        if seller_node not in self.vault_balances:
-            return False, "ERR_AUTH_FAILED"
-            
-        if self.vault_balances[buyer_node if 'buyer_node' in locals() else seller_node] < token_amount:
-            return False, "ERR_INSUFFICIENT_TOKENS"
-            
-        fiat_to_receive = token_amount * self.token_price_idr
-        if self.shop_fiat_vault < fiat_to_receive:
-            return False, "ERR_SHOP_BANKRUPT"
-            
-        # Eksekusi Pertukaran
-        self.vault_balances[seller_node] -= token_amount
-        self.vault_balances[self.shop_address] += token_amount
-        self.shop_fiat_vault -= fiat_to_receive
-        self.fiat_balances[seller_node] += fiat_to_receive
-        
-        log = f"SHOP_SELL_{seller_node[:6]}_VAL_{int(token_amount)}_TLR"
-        self.commit_new_block(prev_node=self.ledger_chain[-1]["node_hash"], payload=log, miner_id=self.shop_address)
-        return True, f"SUCCESS_SOLD_FOR_IDR_{fiat_to_receive:,.0f}"
+    def broadcast_tx(self, engine):
+        if not self.session_key:
+            print("[ERROR] Authenticate session first.")
+            return
+        target = input("\nEnter Destination Address (tlr_...): ").strip()
+        try:
+            amount = float(input("Enter Value to Transfer: "))
+        except ValueError:
+            print("[ERROR] Value must be numerical.")
+            return
+        miner_node = "tlr_network_central_pool"
+        status, log_msg = engine.execute_ledger_transfer(self.session_key, target, amount, miner_node)
+        print(f"[NODE LOG] {log_msg}")
 
-    def execute_ledger_transfer(self, auth_token, target_node, value, fee_recipient):
-        source_node = "tlr_" + hashlib.sha256(auth_token.encode()).hexdigest()[:20]
-        if source_node not in self.vault_balances:
-            return False, "ERR_AUTH_FAILED"
-            
-        total_debit = value + self.base_gas
-        if self.vault_balances[source_node] < total_debit:
-            return False, "ERR_INSUFFICIENT_FUNDS"
-            
-        if target_node not in self.vault_balances:
-            return False, "ERR_INVALID_TARGET"
+    def buy_from_shop(self, engine):
+        """MENU ANGKA 4: Membeli koin dari toko otomatis"""
+        if not self.session_key:
+            print("[ERROR] Authenticate session first.")
+            return
+        try:
+            fiat_spent = float(input(f"\nHarga 1 TLR = Rp {engine.token_price_idr:,.0f}\nMasukkan jumlah Rupiah untuk beli koin: Rp "))
+        except ValueError:
+            print("[ERROR] Input must be numerical.")
+            return
+        status, log_msg = engine.execute_shop_buy(self.session_key, fiat_spent)
+        print(f"[NODE LOG] {log_msg}")
 
-        self.vault_balances[source_node] -= total_debit
-        self.vault_balances[target_node] += value
-        self.vault_balances[fee_recipient] = self.vault_balances.get(fee_recipient, 0.0) + self.base_gas
-        
-        log_summary = f"TXID_{source_node[:6]}_{target_node[:6]}_VAL_{int(value)}"
-        
-        if self.circulating_supply + self.block_subsidy <= self.max_cap:
-            self.vault_balances[fee_recipient] += self.block_subsidy
-            self.circulating_supply += self.block_subsidy
-            
-        self.commit_new_block(prev_node=self.ledger_chain[-1]["node_hash"], payload=log_summary, miner_id=fee_recipient)
-        return True, "TX_SUCCESSFULLY_COMMITTED"
+    def sell_to_shop(self, engine):
+        """MENU ANGKA 5: Menjual koin ke toko otomatis"""
+        if not self.session_key:
+            print("[ERROR] Authenticate session first.")
+            return
+        try:
+            token_sold = float(input("\nMasukkan jumlah koin TLR yang ingin dijual: "))
+        except ValueError:
+            print("[ERROR] Input must be numerical.")
+            return
+        status, log_msg = engine.execute_shop_sell(self.session_key, token_sold)
+        print(f"[NODE LOG] {log_msg}")
 
-    def commit_new_block(self, prev_node, payload, miner_id):
-        height = len(self.ledger_chain)
-        timestamp = int(time.time())
-        raw_data = f"{height}{timestamp}{payload}{prev_node}{miner_id}"
-        node_hash = hashlib.sha256(raw_data.encode()).hexdigest()
-        
-        self.ledger_chain.append({
-            "block_height": height,
-            "timestamp": timestamp,
-            "payload": payload,
-            "miner_id": miner_id,
-            "prev_node": prev_node,
-            "node_hash": node_hash
-        })
+    def save_address(self):
+        """MENU ANGKA 6: Menyimpan alamat koin ke buku alamat"""
+        name = input("\nMasukkan nama pemilik alamat (Contoh: Budi): ").strip()
+        address = input("Masukkan alamat koin (tlr_...): ").strip()
+        if not address.startswith("tlr_"):
+            print("[ERROR] Alamat harus berawalan 'tlr_'")
+            return
+        self.address_book[name] = address
+        print(f"[SUCCESS] Alamat koin {name} berhasil disimpan!")
+
+    def view_address_book(self):
+        """MENU ANGKA 7: Melihat daftar alamat yang disimpan"""
+        print("\n📒 BUKU ALAMAT COIN TELUR Anda:")
+        if not self.address_book:
+            print(" (Buku alamat masih kosong) ")
+            return
+        for name, address in self.address_book.items():
+            print(f"👤 {name} : {address}")
 
 if __name__ == "__main__":
-    node = TelurCoreEngine()
-    print("="*50)
-    print("TELUR SYSTEM ONLINE (SHOPS AND LIQUIDITY READY)")
-    print("="*50)
-    print(f"Token Initial Price   : Rp {node.token_price_idr:,.0f} / TLR")
-    print(f"Shop Token Liquidity  : {node.vault_balances[node.shop_address]:,} TLR")
-    print(f"Shop Cash Reserve     : Rp {node.shop_fiat_vault:,.0f}")
-    print("="*50)
-    
+    from coin_telur import TelurCoreEngine
+    core_network = TelurCoreEngine()
+    client = TelurWalletInterface()
+    client.start_terminal(core_network)
