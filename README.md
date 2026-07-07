@@ -1,74 +1,81 @@
 import hashlib
-import time
 
-class TelurCoreEngine:
+class TelurWalletInterface:
     def __init__(self):
-        self.ledger_chain = []
-        self.vault_balances = {}
-        self.fiat_balances = {}
-        self.token_price_idr = 10000.0  # Harga 1 TLR = Rp 10.000
-        self.shop_address = "tlr_central_liquidity_pool"
-        self.shop_fiat_vault = 50000000.0
-        
-        # Akun Utama Founder
-        self.master_key = "priv_" + hashlib.sha256(b"nmara5220@gmail.com-190619").hexdigest()[:32]
-        self.genesis_address = "tlr_" + hashlib.sha256(self.master_key.encode()).hexdigest()[:20]
-        
-        # Alokasi Saldo Awal
-        self.vault_balances[self.genesis_address] = 15000000.0
-        self.fiat_balances[self.genesis_address] = 100000000.0
-        self.vault_balances[self.shop_address] = 5000000.0
-        
-        self.commit_new_block("0", "GENESIS_ACTIVE", "SYSTEM")
+        self.session_key = None
+        self.session_address = None
+        self.address_book = {}
 
-    def execute_shop_buy(self, auth_token, fiat_amount):
-        buyer = "tlr_" + hashlib.sha256(auth_token.encode()).hexdigest()[:20]
-        if self.fiat_balances.get(buyer, 0.0) < fiat_amount:
-            return False, "ERR_INSUFFICIENT_FIAT"
+    def start_terminal(self, engine):
+        while True:
+            print("\n" + "="*40)
+            print("🍳  TELUR CLIENT TERMINAL v3.0  🍳")
+            print("="*40)
+            if self.session_address:
+                fiat = engine.fiat_balances.get(self.session_address, 0.0)
+                coin = engine.vault_balances.get(self.session_address, 0.0)
+                print(f"ALAMAT : {self.session_address}")
+                print(f"SALDO  : Rp {fiat:,.0f} | {coin:,} TLR")
+            else:
+                print("STATUS : DISCONNECTED")
+            print("-"*40)
+            print("1. Login Dompet (Input Kunci Privat)")
+            print("2. Kirim Koin ke Alamat Lain")
+            print("3. Beli Koin dari Toko")
+            print("4. Jual Koin ke Toko")
+            print("5. Simpan Alamat Baru")
+            print("6. Lihat Buku Alamat")
+            print("7. Keluar")
+            print("="*40)
             
-        tokens = fiat_amount / self.token_price_idr
-        if self.vault_balances[self.shop_address] < tokens:
-            return False, "ERR_OUT_OF_STOCK"
-            
-        self.fiat_balances[buyer] -= fiat_amount
-        self.shop_fiat_vault += fiat_amount
-        self.vault_balances[self.shop_address] -= tokens
-        self.vault_balances[buyer] = self.vault_balances.get(buyer, 0.0) + tokens
-        
-        self.commit_new_block(self.ledger_chain[-1]["node_hash"], f"BUY_{int(tokens)}", buyer)
-        return True, "BUY_SUCCESS"
+            cmd = input("Pilih menu (1-7): ").strip()
 
-    def execute_shop_sell(self, auth_token, token_amount):
-        seller = "tlr_" + hashlib.sha256(auth_token.encode()).hexdigest()[:20]
-        if self.vault_balances.get(seller, 0.0) < token_amount:
-            return False, "ERR_INSUFFICIENT_TOKENS"
-            
-        fiat = token_amount * self.token_price_idr
-        if self.shop_fiat_vault < fiat:
-            return False, "ERR_SHOP_BANKRUPT"
-            
-        self.vault_balances[seller] -= token_amount
-        self.vault_balances[self.shop_address] += token_amount
-        self.shop_fiat_vault -= fiat
-        self.fiat_balances[seller] = self.fiat_balances.get(seller, 0.0) + fiat
-        
-        self.commit_new_block(self.ledger_chain[-1]["node_hash"], f"SELL_{int(token_amount)}", seller)
-        return True, "SELL_SUCCESS"
+            if cmd == "1":
+                key = input("Masukkan Kunci Privat: ").strip()
+                if key.startswith("priv_"):
+                    self.session_key = key
+                    self.session_address = "tlr_" + hashlib.sha256(key.encode()).hexdigest()[:20]
+                    # Pastikan akun terdaftar di data fiat/koin jika belum ada
+                    if self.session_address not in engine.fiat_balances:
+                        engine.fiat_balances[self.session_address] = 20000000.0
+                        engine.vault_balances[self.session_address] = 0.0
+                    print("[OK] Login berhasil.")
+                else:
+                    print("[ERR] Format kunci salah.")
+            elif cmd == "2":
+                if not self.session_key: print("[ERR] Login dulu!"); continue
+                to_addr = input("Alamat tujuan: ").strip()
+                amt = float(input("Jumlah TLR: "))
+                _, msg = engine.execute_ledger_transfer(self.session_key, to_addr, amt)
+                print(f"[LOG] {msg}")
+            elif cmd == "3":
+                if not self.session_key: print("[ERR] Login dulu!"); continue
+                fiat_amt = float(input("Jumlah Rupiah untuk beli: Rp "))
+                _, msg = engine.execute_shop_buy(self.session_key, fiat_amt)
+                print(f"[LOG] {msg}")
+            elif cmd == "4":
+                if not self.session_key: print("[ERR] Login dulu!"); continue
+                coin_amt = float(input("Jumlah TLR untuk dijual: "))
+                _, msg = engine.execute_shop_sell(self.session_key, coin_amt)
+                print(f"[LOG] {msg}")
+            elif cmd == "5":
+                name = input("Nama pemilik: ").strip()
+                addr = input("Alamat koin (tlr_...): ").strip()
+                if addr.startswith("tlr_"):
+                    self.address_book[name] = addr
+                    print("[OK] Alamat disimpan.")
+                else:
+                    print("[ERR] Alamat tidak valid.")
+            elif cmd == "6":
+                print("\n📒 BUKU ALAMAT:")
+                for name, addr in self.address_book.items():
+                    print(f"👤 {name}: {addr}")
+            elif cmd == "7":
+                print("Terminal ditutup."); break
 
-    def execute_ledger_transfer(self, auth_token, target, value):
-        source = "tlr_" + hashlib.sha256(auth_token.encode()).hexdigest()[:20]
-        if self.vault_balances.get(source, 0.0) < (value + 5.0):
-            return False, "ERR_INSUFFICIENT_FUNDS"
-            
-        self.vault_balances[source] -= (value + 5.0)
-        self.vault_balances[target] = self.vault_balances.get(target, 0.0) + value
-        
-        self.commit_new_block(self.ledger_chain[-1]["node_hash"], f"SEND_{int(value)}", source)
-        return True, "TRANSFER_SUCCESS"
+if __name__ == "__main__":
+    from coin_telur import TelurCoreEngine
+    core = TelurCoreEngine()
+    client = TelurWalletInterface()
+    client.start_terminal(core)
 
-    def commit_new_block(self, prev, payload, miner):
-        h = len(self.ledger_chain)
-        t = int(time.time())
-        raw = f"{h}{t}{payload}{prev}{miner}"
-        node_hash = hashlib.sha256(raw.encode()).hexdigest()
-        self.ledger_chain.append({"block_height": h, "payload": payload, "node_hash": node_hash})
